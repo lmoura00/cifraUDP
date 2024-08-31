@@ -21,12 +21,26 @@ def decrypt_message(encrypted_message):
     return decrypted
 
 # Função para envio de ACK
-def send_ack(server_socket, client_address, seq_num, message=None):
+def send_ack(server_socket, client_address, seq_num, message=None, simulate_error=None):
     ack_packet = f"ACK{seq_num}"
+    
     if message:
         ack_packet += message
-    server_socket.sendto(ack_packet.encode(), client_address)
+    
+    if simulate_error == "corrupção":
+        ack_packet = "ACKX" + ack_packet[4:]  # Corromper o número de sequência no ACK
+    
+    if simulate_error != "perda":
+        server_socket.sendto(ack_packet.encode(), client_address)
+    else:
+        print("Simulação de perda do ACK. Não enviando o ACK.")
 
+# def exit ():
+#     exit
+# Input = input(f"Pressione 'Q' para sair: ")
+# if Input == "q":
+#     exit()
+    
 # Função do servidor
 def server():
     server_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -35,7 +49,6 @@ def server():
     expected_seq_num = 0
 
     print("Servidor aguardando mensagens...")
-
     while True:
         packet, client_address = server_socket.recvfrom(1024)
         packet = packet.decode()
@@ -48,6 +61,11 @@ def server():
         calculated_checksum = calculate_checksum(encrypted_message)
 
         if checksum == calculated_checksum and seq_num == expected_seq_num:
+            print(f"----------------PACKAGE {seq_num}-----------------------\n")
+            print(f"NUM SEQUENCIA: {seq_num}")
+            print(f"CHECKSUM RECEBIDO: {checksum}")
+            print(f"CHECKSUM EXPERADO: {checksum}")
+            
             # Descriptografar a mensagem
             message = decrypt_message(encrypted_message)
             print(f"Mensagem recebida: {message}")
@@ -57,7 +75,11 @@ def server():
             print(f"Mensagem criptografada: {encrypted_message}")
 
             # Enviar ACK com a mensagem criptografada de volta
+            print(f"------------------FIM DO PACKAGE {seq_num}---------------------\n\n")
+
             send_ack(server_socket, client_address, seq_num, encrypted_message)
+            #print(f"----------------ACK {seq_num}-----------------------\n")
+
             expected_seq_num = 1 - expected_seq_num
         else:
             # Ignorar ou reenviar o último ACK se for duplicado

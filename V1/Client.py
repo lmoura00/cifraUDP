@@ -3,6 +3,7 @@ import hashlib
 import threading
 import time
 import tkinter as tk
+import os
 from tkinter import messagebox
 
 # Função para calcular o checksum
@@ -31,7 +32,13 @@ def send_packet(client_socket, server_address, seq_num, message, simulate_error=
         checksum = "00000000000000000000000000000000"  # Corromper o checksum
     
     packet = f"{seq_num}{checksum}{message}"
-    
+    print(f"---------------- PACKAGE {seq_num}-----------------------\n")
+    print(f"NUM SEQUENCIA: {seq_num}")
+    print(f"CHECKSUM CRIADO: {checksum}")
+    print(f"message: {message}")
+    print(f"------------------FIM DO {seq_num}---------------------\n\n")
+
+
     if simulate_error != "perda":
         client_socket.sendto(packet.encode(), server_address)
 

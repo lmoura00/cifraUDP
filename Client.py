@@ -3,11 +3,26 @@ import hashlib
 import threading
 import time
 import tkinter as tk
+import os
 from tkinter import messagebox
 
 # Função para calcular o checksum
 def calculate_checksum(data):
     return hashlib.md5(data.encode()).hexdigest()
+
+# Função para criptografar a mensagem (substituição simples)
+def encrypt_message(message):
+    encrypted = ""
+    for char in message:
+        encrypted += chr((ord(char) + 3) % 256)  # Shift simples de 3
+    return encrypted
+
+# Função para descriptografar a mensagem (substituição simples)
+def decrypt_message(encrypted_message):
+    decrypted = ""
+    for char in encrypted_message:
+        decrypted += chr((ord(char) - 3) % 256)
+    return decrypted
 
 # Função para enviar pacotes (com opção de simulação de erro)
 def send_packet(client_socket, server_address, seq_num, message, simulate_error=None):
@@ -17,7 +32,12 @@ def send_packet(client_socket, server_address, seq_num, message, simulate_error=
         checksum = "00000000000000000000000000000000"  # Corromper o checksum
     
     packet = f"{seq_num}{checksum}{message}"
-    
+    print(f"---------------- PACKAGE {seq_num}-----------------------\n")
+    print(f"NUM SEQUENCIA: {seq_num}")
+    print(f"CHECKSUM CRIADO: {checksum}")
+    print(f"message: {message}")
+    print(f"------------------FIM DO {seq_num}---------------------\n\n")
+
     if simulate_error != "perda":
         client_socket.sendto(packet.encode(), server_address)
 
@@ -34,9 +54,20 @@ def start_timer(client_socket, server_address, seq_num, message):
             ack, _ = client_socket.recvfrom(1024)
             ack = ack.decode()
             
-            if ack == f"ACK{seq_num}":
+            received_checksum = ack[:32]  # Checksum do ACK
+            ack_message = ack[32:]        # Conteúdo do ACK
+
+            # Verificação do checksum do ACK
+            if calculate_checksum(ack_message) == received_checksum and ack_message.startswith("ACK"):
+                response_message = ack_message[4:]  # Mensagem original sem "ACK"
                 messagebox.showinfo("Status", "Pacote enviado com sucesso!")
+                response_var.set(f"Resposta do servidor: {response_message}")
+                
+                # Enviar confirmação de recebimento do ACK
+                client_socket.sendto(ack.encode(), server_address)
                 return
+            else:
+                print("Erro: Checksum do ACK inválido ou mensagem incorreta.")
         except socket.timeout:
             pass
     
@@ -47,6 +78,12 @@ def start_timer(client_socket, server_address, seq_num, message):
 # Função para lidar com alarmes no cliente
 def alarm_message(msg):
     print(f"ALERTA: {msg}")
+
+# Função para copiar a resposta para a área de transferência
+def copy_response():
+    root.clipboard_clear()
+    root.clipboard_append(response_var.get())
+    messagebox.showinfo("Copiar", "Resposta copiada para a área de transferência!")
 
 # Função do cliente
 def client():
@@ -59,10 +96,18 @@ def client():
         nonlocal seq_num
         message = entry_message.get()
         error_type = error_var.get()
+        
+        # Criptografar ou descriptografar com base na seleção
+        if crypto_action.get() == "Criptografar":
+            message = encrypt_message(message)
+        elif crypto_action.get() == "Descriptografar":
+            message = decrypt_message(message)
+
         send_packet(client_socket, server_address, seq_num, message, simulate_error=error_type)
         seq_num = 1 - seq_num
-    
+
     # Interface Tkinter
+    global root
     root = tk.Tk()
     root.title("Cliente RDT 3.0")
 
@@ -79,6 +124,19 @@ def client():
     tk.Radiobutton(root, text="Envio Normal", variable=error_var, value="normal").grid(row=2, column=0)
     tk.Radiobutton(root, text="Simular Perda", variable=error_var, value="perda").grid(row=2, column=1)
     tk.Radiobutton(root, text="Simular Corrupção", variable=error_var, value="corrupção").grid(row=2, column=2)
+    
+    # Seleção de criptografar ou descriptografar
+    crypto_action = tk.StringVar(value="Criptografar")
+    tk.Radiobutton(root, text="Criptografar", variable=crypto_action, value="Criptografar").grid(row=3, column=0)
+    tk.Radiobutton(root, text="Descriptografar", variable=crypto_action, value="Descriptografar").grid(row=3, column=1)
+
+    # Exibição da resposta do servidor
+    global response_var
+    response_var = tk.StringVar()
+    tk.Label(root, textvariable=response_var).grid(row=4, column=0, columnspan=3)
+
+    # Botão para copiar a resposta
+    tk.Button(root, text="Copiar Resposta", command=copy_response).grid(row=5, column=1)
     
     root.mainloop()
 
